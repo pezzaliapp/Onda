@@ -142,7 +142,7 @@ a{color:var(--signal)}
 
 /* ---------- now playing bar ---------- */
 .player{
-  position:fixed;left:0;right:0;bottom:var(--tabbar-h);z-index:30;
+  position:fixed;left:0;right:0;bottom:calc(var(--tabbar-h) + env(safe-area-inset-bottom));z-index:30;
   background:rgba(251,249,243,.94);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
   border-top:1px solid var(--line);box-shadow:0 -10px 30px rgba(27,26,23,.07);
   transform:translateY(160%);transition:transform .3s ease;
@@ -163,6 +163,9 @@ a{color:var(--signal)}
   display:flex;align-items:center;justify-content:center;box-shadow:0 4px 14px rgba(228,69,43,.35)}
 .player .pbtn:active{transform:scale(.94)}
 .player .pbtn svg{width:20px;height:20px}
+#volume{flex:none}
+/* su telefono niente slider volume (si usano i tasti fisici): spazio pieno al play */
+@media (max-width:559px){ #volume{display:none} }
 
 /* ---------- tab bar ---------- */
 .tabbar{
@@ -200,7 +203,7 @@ a{color:var(--signal)}
 .splash .enter:active{transform:scale(.96)}
 
 /* ---------- toast ---------- */
-.toast{position:fixed;left:50%;bottom:calc(var(--tabbar-h) + var(--player-h) + 18px);
+.toast{position:fixed;left:50%;bottom:calc(var(--tabbar-h) + var(--player-h) + 18px + env(safe-area-inset-bottom));
   transform:translateX(-50%) translateY(20px);z-index:40;
   background:var(--ink);color:var(--card);font-family:var(--font-mono);font-size:12px;
   padding:11px 16px;border-radius:12px;max-width:90%;text-align:center;opacity:0;
