@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>ONDA — Radio del mondo</title>
+<meta name="description" content="L'app che ti collega alle radio del mondo. Directory indipendente di radio in streaming pubbliche.">
+<meta name="theme-color" content="#e4452b">
+
+<!-- PWA -->
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icons/favicon.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ONDA">
+
+<!-- Font -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+
+<!-- HLS.js: per radio in formato .m3u8 (es. Discoradio) -->
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1/dist/hls.min.js"></script>
+
+<link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+
+<!-- ============ SPLASH ============ -->
+<div class="splash" id="splash">
+  <span class="ring"></span><span class="ring r2"></span><span class="ring r3"></span>
+  <div class="logo">ONDA<span class="dot"></span></div>
+  <div class="sub">L'app che ti collega alle radio del mondo</div>
+  <button class="enter" id="enterBtn">Tocca per entrare</button>
+</div>
+
+<!-- ============ APP ============ -->
+<div class="wrap">
+  <header class="appbar">
+    <div class="brand"><h1>ONDA<span class="dot"></span></h1></div>
+    <div style="display:flex;align-items:center">
+      <span class="payoff">L'app che ti collega<br>alle radio del mondo</span>
+      <button class="icon-btn" id="infoBtn" title="Info legale e privacy" aria-label="Info">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ---- HOME ---- -->
+  <section class="view active" id="view-home">
+    <div class="section-title">In evidenza</div>
+    <div class="list" id="homeDemo"></div>
+    <div class="section-title" id="homeRecentTitle" style="display:none">Continua ad ascoltare</div>
+    <div class="list" id="homeRecent"></div>
+  </section>
+
+  <!-- ---- CERCA ---- -->
+  <section class="view" id="view-search">
+    <div class="section-title">Cerca radio</div>
+    <div class="search-row">
+      <input id="searchInput" type="text" placeholder="nome radio (es. Capital, Jazz24)…" autocomplete="off">
+      <button class="go" id="searchGo">Cerca</button>
+    </div>
+    <div class="filters">
+      <select id="countrySelect" aria-label="Nazione"></select>
+    </div>
+    <div class="chips" id="genreChips"></div>
+    <div class="list" id="searchResults">
+      <div class="empty">Cerca per <b>nome</b>, filtra per <b>nazione</b> o tocca un <b>genere</b>.</div>
+    </div>
+  </section>
+
+  <!-- ---- PREFERITI ---- -->
+  <section class="view" id="view-favorites">
+    <div class="section-title">I tuoi preferiti</div>
+    <div class="list" id="favList"></div>
+  </section>
+
+  <!-- ---- RECENTI ---- -->
+  <section class="view" id="view-recents">
+    <div class="section-title">Ascoltati di recente</div>
+    <div class="list" id="recentList"></div>
+
+    <div class="section-title">Sleep timer</div>
+    <div class="sleep">
+      <button class="opt on" data-min="0">Off</button>
+      <button class="opt" data-min="15">15'</button>
+      <button class="opt" data-min="30">30'</button>
+      <button class="opt" data-min="45">45'</button>
+      <button class="opt" data-min="60">60'</button>
+    </div>
+    <div class="sleep-status" id="sleepStatus">Timer spento.</div>
+  </section>
+
+  <!-- ---- INFO LEGALE / PRIVACY / TERMINI ---- -->
+  <section class="view legal" id="view-info">
+    <h2>Info legale</h2>
+    <div class="box">
+      ONDA è una directory indipendente di collegamenti a flussi radio pubblicamente disponibili.
+      ONDA non ospita, non registra e non ritrasmette contenuti audio. Tutti i marchi, nomi, loghi
+      e contenuti appartengono ai rispettivi proprietari. Le emittenti possono richiedere
+      aggiornamento o rimozione dei propri collegamenti.
+    </div>
+
+    <h2>Privacy</h2>
+    <p>ONDA non richiede registrazione e non raccoglie dati personali. Non utilizza cookie di
+       tracciamento, non profila gli utenti e non invia dati a server propri.</p>
+    <p>Le tue preferenze (radio preferite e cronologia di ascolto) restano <b>solo sul tuo
+       dispositivo</b>, nello spazio locale del browser, e non vengono trasmesse a nessuno.
+       Puoi cancellarle in qualsiasi momento svuotando i dati del sito.</p>
+    <p>La riproduzione avviene collegandosi direttamente ai server delle emittenti: in quel
+       momento il tuo dispositivo comunica con quei server, che applicano le proprie informative.
+       La ricerca usa il servizio pubblico Radio Browser.</p>
+
+    <h2>Termini</h2>
+    <p>ONDA è fornita "così com'è", senza garanzie sulla continuità o disponibilità dei flussi,
+       che dipendono interamente dalle emittenti. I collegamenti possono cambiare o cessare in
+       qualsiasi momento.</p>
+    <p>ONDA è un progetto indipendente e non rappresenta né è affiliata alle emittenti elencate.</p>
+    <p>Per segnalazioni o richieste di rimozione di un collegamento, usa il pulsante "segnala"
+       presente su ogni radio, oppure scrivi a
+       <a id="contactLink" href="#">l'indirizzo di contatto</a>.</p>
+    <small>ONDA · di PezzaliApp — l'app che ti collega alle radio del mondo.</small>
+  </section>
+</div>
+
+<!-- ============ PLAYER BAR ============ -->
+<div class="player" id="player">
+  <div class="pinner">
+    <div class="pava" id="barAva"></div>
+    <div class="pinfo">
+      <div class="pname" id="barName">—</div>
+      <div class="pstatus" id="barStatus">in pausa</div>
+    </div>
+    <input id="volume" type="range" min="0" max="100" value="85" style="width:84px" aria-label="Volume">
+    <button class="pbtn" id="barBtn" aria-label="Play o pausa">
+      <svg id="barIcon" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+    </button>
+  </div>
+</div>
+
+<!-- ============ TAB BAR ============ -->
+<nav class="tabbar">
+  <div class="tinner">
+    <button class="tab active" data-view="home">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9.5 12 3l9 6.5V20a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z"/></svg>
+      Home
+    </button>
+    <button class="tab" data-view="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><line x1="21" y1="21" x2="16.5" y2="16.5"/></svg>
+      Cerca
+    </button>
+    <button class="tab" data-view="favorites">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.8 4.6a5.5 5.5 0 0 0-7.8 0L12 5.7l-1-1.1a5.5 5.5 0 0 0-7.8 7.8l1 1.1L12 21l7.8-7.5 1-1.1a5.5 5.5 0 0 0 0-7.8z"/></svg>
+      Preferiti
+    </button>
+    <button class="tab" data-view="recents">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+      Recenti
+    </button>
+  </div>
+</nav>
+
+<div class="toast" id="toast"></div>
+
+<script src="js/app.js"></script>
+</body>
+</html>
