@@ -4,7 +4,7 @@
    - HTML: network-first (così vedi sempre l'ultima versione quando sei online)
    - Asset locali (css/js/icone): cache-first
    Ricorda: aumenta il numero di versione CACHE a ogni rilascio per forzare l'update. */
-const CACHE = 'onda-v1';
+const CACHE = 'onda-v3';
 
 const ASSETS = [
   './',
