@@ -1,10 +1,9 @@
 {
-  "id": "/Onda/?app=onda-radio",
-  "name": "ONDA — Radio del mondo",
+  "id": "/Onda/?source=pwa",
+  "name": "ONDA — Radio Live",
   "short_name": "ONDA",
-  "description": "L'app che ti collega alle radio del mondo",
+  "description": "L'app che ti collega in streaming alle radio del mondo",
   "lang": "it",
-  "dir": "ltr",
   "start_url": "/Onda/?source=pwa",
   "scope": "/Onda/",
   "display": "standalone",
