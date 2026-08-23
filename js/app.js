@@ -16,6 +16,7 @@ const CONFIG = {
   // >>> CAMBIALA con la tua email reale <<<
   contactEmail: 'info@alessandropezzali.it',
 
+  // Endpoint Radio Browser (mirror pubblico). Nessuna chiave richiesta.
   // Endpoint Radio Browser: più mirror, provati in ordine.
   // Se de1 è giù (capita spesso), si passa al successivo.
   rbBases: [
@@ -81,7 +82,10 @@ const Store = (() => {
    --------------------------------------------------------- */
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
-const HTTPS = location.protocol === 'https:';
+const NATIVE = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+// In app nativa (capacitor://) trattiamo il contesto come "sicuro" come l'HTTPS:
+// così gli stream http restano filtrati, coerente con l'App Transport Security (solo HTTPS).
+const HTTPS = location.protocol === 'https:' || NATIVE;
 const isHls = (url) => /\.m3u8(\?|$)/i.test(url || '');
 const isBlocked = (url) => HTTPS && /^http:/i.test(url || ''); // mixed content su HTTPS
 const sameUrl = (a, b) => (a || '').trim() === (b || '').trim();
@@ -118,7 +122,6 @@ const audio = new Audio();
 audio.preload = 'none';
 let hls = null;
 
-
 const ICON_PLAY  = '<path d="M8 5v14l11-7z"/>';
 const ICON_PAUSE = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
 
@@ -136,7 +139,7 @@ function loadStream(url) {
       hls.on(window.Hls.Events.ERROR, (e, d) => {
         if (d && d.fatal) {
           // Su Android/desktop hls.js usa fetch → serve il CORS lato radio.
-          // Safari iOS legge HLS nativamente e NON richiede CORS: per questo
+          // Safari/iOS legge HLS nativamente e NON richiede CORS: per questo
           // la stessa radio può funzionare su iPhone e fallire qui.
           if (d.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
             onError('Stream HLS non raggiungibile da questo browser (CORS o rete)');
@@ -157,13 +160,14 @@ function loadStream(url) {
 }
 
 function doPlay() {
-
   const p = audio.play();
   if (p && p.catch) p.catch(() => setPlayerStatus('avvio bloccato — tocca di nuovo play', true));
 }
 
 function start() {
   setPlayerStatus('sintonizzazione…');
+  // Attiva la sessione audio nativa (AVAudioSession .playback) al primo play.
+  if (window.ONDANative) window.ONDANative.activate();
   // IMPORTANTE (Android): play() va chiamato SUBITO, dentro il tocco
   // dell'utente. Con hls.js attachMedia imposta già la sorgente MSE,
   // quindi play() resta "in attesa" e parte appena arrivano i dati.
@@ -201,6 +205,7 @@ function onError(msg) {
   setPlayerStatus(msg || 'stream non raggiungibile — prova un\u2019altra radio', true);
   setIcons();
   markPlayingCards();
+  setMediaPlaybackState('paused');
   toast(msg || 'Questa radio non risponde in questo momento.');
 }
 
@@ -210,6 +215,7 @@ audio.addEventListener('playing', () => {
   setIcons();
   $('#player').classList.add('live');
   markPlayingCards();
+  setMediaPlaybackState('playing');
   if (State.current) addRecent(State.current);
 });
 audio.addEventListener('pause', () => {
@@ -218,22 +224,51 @@ audio.addEventListener('pause', () => {
   setIcons();
   $('#player').classList.remove('live');
   markPlayingCards();
+  setMediaPlaybackState('paused');
 });
 audio.addEventListener('waiting', () => setPlayerStatus('buffering…'));
 audio.addEventListener('error', onError);
 
 function updateMediaSession(st) {
-  if (!('mediaSession' in navigator)) return;
-  try {
-    navigator.mediaSession.metadata = new MediaMetadata({
-      title: st.name,
-      artist: st.genre || 'ONDA',
-      album: 'ONDA',
-      artwork: [{ src: st.favicon || 'icons/icon-512.png', sizes: '512x512', type: 'image/png' }]
-    });
-    navigator.mediaSession.setActionHandler('play', () => togglePlay());
-    navigator.mediaSession.setActionHandler('pause', () => audio.pause());
-  } catch (e) { /* alcuni browser non supportano tutto */ }
+  // Metadata distintivi per stazione: titolo = nome radio, artista = genere reale.
+  const artwork = st.favicon || 'icons/icon-512.png';
+  const title = st.name || 'ONDA';
+  const artist = st.genre || 'Radio live';
+
+  // 1) Web Media Session (browser / PWA)
+  if ('mediaSession' in navigator) {
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: title,
+        artist: artist,
+        album: 'ONDA',
+        artwork: [
+          { src: artwork, sizes: '512x512', type: 'image/png' },
+          { src: 'icons/icon-192.png', sizes: '192x192', type: 'image/png' }
+        ]
+      });
+      navigator.mediaSession.setActionHandler('play', () => togglePlay());
+      navigator.mediaSession.setActionHandler('pause', () => audio.pause());
+      navigator.mediaSession.setActionHandler('stop', () => audio.pause());
+    } catch (e) { /* alcuni browser non supportano tutto */ }
+  }
+
+  // 2) Ponte nativo iOS (Capacitor) → MPNowPlayingInfoCenter (lock screen)
+  if (window.ONDANative) {
+    window.ONDANative.setNowPlaying({ title: title, artist: artist, album: 'ONDA', artwork: artwork });
+  }
+}
+
+// Igiene Media Session: stato di riproduzione coerente su web e nativo.
+// state: 'playing' | 'paused' | 'none' (none = rilascio della sessione)
+function setMediaPlaybackState(state) {
+  if ('mediaSession' in navigator) {
+    try { navigator.mediaSession.playbackState = state; } catch (e) {}
+  }
+  if (window.ONDANative) {
+    if (state === 'none') window.ONDANative.clear();
+    else window.ONDANative.setPlaybackState({ state: state });
+  }
 }
 
 /* ---------------------------------------------------------
@@ -559,11 +594,48 @@ function initSplash() {
 }
 
 function registerSW() {
-  if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-      navigator.serviceWorker.register('service-worker.js').catch(() => {});
+  if (!('serviceWorker' in navigator) || NATIVE) return; // in app nativa i file sono nel bundle
+
+  window.addEventListener('load', async () => {
+    let reg;
+    try { reg = await navigator.serviceWorker.register('service-worker.js'); }
+    catch (e) { return; }
+
+    // Controlla se c'è una versione nuova: all'avvio, quando l'app
+    // torna in primo piano e comunque ogni ora.
+    const check = () => { try { reg.update(); } catch (e) {} };
+    check();
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') check();
     });
-  }
+    setInterval(check, 60 * 60 * 1000);
+
+    // Se un nuovo SW è già installato e in attesa, attivalo subito.
+    if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' });
+    reg.addEventListener('updatefound', () => {
+      const nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener('statechange', () => {
+        if (nw.state === 'installed' && navigator.serviceWorker.controller) {
+          nw.postMessage({ type: 'SKIP_WAITING' });
+        }
+      });
+    });
+
+    // Quando il nuovo SW prende il controllo → applica l'aggiornamento.
+    // Ricarica da solo SOLO se non c'è una radio in riproduzione, per
+    // non interrompere l'ascolto; altrimenti avvisa con un toast.
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (reloaded) return;
+      reloaded = true;
+      if (!State.playing) {
+        location.reload();
+      } else {
+        toast('ONDA è stata aggiornata: la nuova versione parte alla prossima apertura.');
+      }
+    });
+  });
 }
 
 function init() {
