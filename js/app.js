@@ -16,8 +16,13 @@ const CONFIG = {
   // >>> CAMBIALA con la tua email reale <<<
   contactEmail: 'info@alessandropezzali.it',
 
-  // Endpoint Radio Browser (mirror pubblico). Nessuna chiave richiesta.
-  rbBase: 'https://de1.api.radio-browser.info/json/stations/search?',
+  // Endpoint Radio Browser: più mirror, provati in ordine.
+  // Se de1 è giù (capita spesso), si passa al successivo.
+  rbBases: [
+    'https://de1.api.radio-browser.info/json/stations/search?',
+    'https://fi1.api.radio-browser.info/json/stations/search?',
+    'https://at1.api.radio-browser.info/json/stations/search?'
+  ],
 
   // Radio demo / "in evidenza": tutte HTTPS e affidabili, usate anche
   // come fallback se l'API non risponde.
@@ -112,7 +117,7 @@ const State = {
 const audio = new Audio();
 audio.preload = 'none';
 let hls = null;
-let pendingPlay = false;
+
 
 const ICON_PLAY  = '<path d="M8 5v14l11-7z"/>';
 const ICON_PAUSE = '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
@@ -126,10 +131,20 @@ function loadStream(url) {
   if (isHls(url)) {
     if (window.Hls && window.Hls.isSupported()) {
       hls = new window.Hls();
-      hls.loadSource(url);
-      hls.attachMedia(audio);
-      hls.on(window.Hls.Events.MANIFEST_PARSED, () => { if (pendingPlay) doPlay(); });
-      hls.on(window.Hls.Events.ERROR, (e, d) => { if (d && d.fatal) onError(); });
+      hls.attachMedia(audio);       // prima attach (crea la MediaSource)
+      hls.loadSource(url);          // poi il manifest
+      hls.on(window.Hls.Events.ERROR, (e, d) => {
+        if (d && d.fatal) {
+          // Su Android/desktop hls.js usa fetch → serve il CORS lato radio.
+          // Safari iOS legge HLS nativamente e NON richiede CORS: per questo
+          // la stessa radio può funzionare su iPhone e fallire qui.
+          if (d.type === window.Hls.ErrorTypes.NETWORK_ERROR) {
+            onError('Stream HLS non raggiungibile da questo browser (CORS o rete)');
+          } else {
+            onError();
+          }
+        }
+      });
     } else if (audio.canPlayType('application/vnd.apple.mpegurl')) {
       audio.src = url; // Safari legge HLS nativamente
     } else {
@@ -142,15 +157,19 @@ function loadStream(url) {
 }
 
 function doPlay() {
-  pendingPlay = false;
+
   const p = audio.play();
   if (p && p.catch) p.catch(() => setPlayerStatus('avvio bloccato — tocca di nuovo play', true));
 }
 
 function start() {
   setPlayerStatus('sintonizzazione…');
-  if (hls) { pendingPlay = true; setTimeout(() => { if (pendingPlay) doPlay(); }, 1500); }
-  else doPlay();
+  // IMPORTANTE (Android): play() va chiamato SUBITO, dentro il tocco
+  // dell'utente. Con hls.js attachMedia imposta già la sorgente MSE,
+  // quindi play() resta "in attesa" e parte appena arrivano i dati.
+  // Il vecchio rinvio con setTimeout/evento faceva scadere il gesto
+  // utente su Chrome e Samsung Internet → NotAllowedError (bloccato).
+  doPlay();
 }
 
 function playStation(st) {
@@ -177,12 +196,12 @@ function togglePlay() {
   else { loadStream(State.current.url); start(); }
 }
 
-function onError() {
+function onError(msg) {
   State.playing = false;
-  setPlayerStatus('stream non raggiungibile — prova un\u2019altra radio', true);
+  setPlayerStatus(msg || 'stream non raggiungibile — prova un\u2019altra radio', true);
   setIcons();
   markPlayingCards();
-  toast('Questa radio non risponde in questo momento.');
+  toast(msg || 'Questa radio non risponde in questo momento.');
 }
 
 audio.addEventListener('playing', () => {
@@ -410,8 +429,21 @@ function dedupe(arr) {
 }
 
 async function rb(params) {
-  const r = await fetch(CONFIG.rbBase + params, { headers: { 'Accept': 'application/json' } });
-  return await r.json();
+  let lastErr;
+  for (const base of CONFIG.rbBases) {
+    try {
+      const ctrl = new AbortController();
+      const t = setTimeout(() => ctrl.abort(), 6000);
+      const r = await fetch(base + params, {
+        headers: { 'Accept': 'application/json' },
+        signal: ctrl.signal
+      });
+      clearTimeout(t);
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      return await r.json();
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('Radio Browser non raggiungibile');
 }
 
 async function doSearch() {
@@ -428,6 +460,9 @@ async function doSearch() {
   if (country) q.push('countrycode=' + encodeURIComponent(country));
   if (tag) q.push('tag=' + encodeURIComponent(tag));
   q.push('hidebroken=true', 'order=clickcount', 'reverse=true', 'limit=40');
+  // Su HTTPS chiedi direttamente al server solo stream https:
+  // meno risultati "morti" e nessuna radio bloccata dal mixed content.
+  if (HTTPS) q.push('is_https=true');
 
   try {
     let data = dedupe(await rb(q.join('&')));
